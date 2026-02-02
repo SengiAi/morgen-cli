@@ -1,0 +1,65 @@
+{
+  "name": "morgen-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for Morgen calendar and task management",
+  "type": "module",
+  "author": "Johannes <johannes@sengi.se>",
+  "license": "MIT",
+  "company": "Sengi AI AB",
+  "keywords": [
+    "morgen",
+    "calendar",
+    "tasks",
+    "cli",
+    "productivity",
+    "scheduling"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/morgen-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/morgen-cli/issues"
+  },
+  "homepage": "https://github.com/yourusername/morgen-cli#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "morgen-calendar": "./dist/morgen-calendar.cjs",
+    "morgen-tasks": "./dist/morgen-tasks.cjs",
+    "morgen-config": "./dist/morgen-config.cjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev:calendar": "tsx src/calendar/cli.ts",
+    "dev:tasks": "tsx src/tasks/cli.ts",
+    "dev:config": "tsx src/config-cli.ts",
+    "prepack": "pnpm build",
+    "build": "node esbuild.config.mjs",
+    "build:prod": "NODE_ENV=production node esbuild.config.mjs",
+    "type-check": "tsc --noEmit",
+    "start": "node dist/calendar/cli.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.3",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.2",
+    "dotenv": "^16.4.7",
+    "envalid": "^8.1.0",
+    "external-editor": "^3.1.0",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "esbuild": "^0.24.2",
+    "esbuild-plugin-clean": "^1.0.1",
+    "esbuild-plugin-copy": "^2.1.1",
+    "tsx": "^4.19.3",
+    "typescript": "5.3.3"
+  }
+}

@@ -1,0 +1,32 @@
+# Source files
+src/
+*.ts
+*.mjs
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Development
+.pnpm-store/
+*.log
+
+# Testing
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+.git/
+.github/
