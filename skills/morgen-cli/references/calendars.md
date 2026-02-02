@@ -41,7 +41,8 @@ morgen-calendar list-events \
   --calendar-id <CAL_ID> \
   --account-id <ACC_ID> \
   --start <ISO_DATE> \
-  --end <ISO_DATE>
+  --end <ISO_DATE> \
+  [--timezone <TZ>]
 # Alias: morgen-calendar le
 ```
 
@@ -51,12 +52,14 @@ morgen-calendar list-events \
 | `--account-id` | Yes | - |
 | `--start` | No | 7 days ago |
 | `--end` | No | 7 days ahead |
+| `--timezone` | No | Europe/Stockholm |
 
 **Date format:** ISO 8601 (e.g., `2025-01-28T00:00:00`)
+**Timezone:** IANA timezone for displaying event times (e.g., `America/New_York`, `Asia/Tokyo`)
 
 **Examples:**
 ```bash
-# This week
+# This week (times displayed in Europe/Stockholm by default)
 morgen-calendar list-events \
   --calendar-id cal_abc123 \
   --account-id acc_xyz789 \
@@ -69,6 +72,14 @@ morgen-calendar list-events \
   --account-id acc_xyz789 \
   --start "2025-01-28T00:00:00" \
   --end "2025-01-28T23:59:59"
+
+# Display times in a different timezone
+morgen-calendar list-events \
+  --calendar-id cal_abc123 \
+  --account-id acc_xyz789 \
+  --start "2025-01-28T00:00:00" \
+  --end "2025-01-28T23:59:59" \
+  --timezone "America/New_York"
 ```
 
 ## Create Event

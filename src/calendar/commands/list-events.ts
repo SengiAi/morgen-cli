@@ -6,6 +6,32 @@ interface ListEventsOptions {
   accountId: string;
   start?: string;
   end?: string;
+  timezone?: string;
+}
+
+/**
+ * Convert an ISO 8601 timestamp to a specific timezone and format it
+ * @param isoString ISO 8601 timestamp
+ * @param timezone IANA timezone (e.g., "Europe/Stockholm")
+ * @returns Formatted date string in the target timezone
+ */
+function formatDateInTimezone(isoString: string, timezone: string): string {
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleString("sv-SE", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  } catch (error) {
+    // If conversion fails, return original string
+    return isoString;
+  }
 }
 
 export async function listEventsCommand(options: ListEventsOptions) {
@@ -19,6 +45,9 @@ export async function listEventsCommand(options: ListEventsOptions) {
       console.error(chalk.red("Error: --account-id is required"));
       process.exit(1);
     }
+
+    // Default timezone to Europe/Stockholm if not provided
+    const displayTimezone = options.timezone || "Europe/Stockholm";
 
     // Default to current week if start/end not provided
     const now = new Date();
@@ -57,7 +86,9 @@ export async function listEventsCommand(options: ListEventsOptions) {
       if (event.id) {
         console.log(`  ID: ${event.id}`);
       }
-      console.log(`  Start: ${event.start}`);
+      console.log(
+        `  Start: ${formatDateInTimezone(event.start, displayTimezone)}`,
+      );
 
       // Calculate end time and duration
       let endTime: string | undefined = event.end;
@@ -108,7 +139,7 @@ export async function listEventsCommand(options: ListEventsOptions) {
       }
 
       if (endTime) {
-        console.log(`  End: ${endTime}`);
+        console.log(`  End: ${formatDateInTimezone(endTime, displayTimezone)}`);
       }
       if (duration) {
         // Format duration nicely (if it's ISO 8601 format, parse it)

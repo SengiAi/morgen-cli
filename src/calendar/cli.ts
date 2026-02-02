@@ -43,6 +43,10 @@ program
     "--end <date>",
     "End date (ISO 8601 format, defaults to 7 days from now)",
   )
+  .option(
+    "--timezone <tz>",
+    "Timezone for displaying times (IANA format, e.g., Europe/Stockholm). Defaults to Europe/Stockholm",
+  )
   .action((options) => {
     listEventsCommand(options);
   });
