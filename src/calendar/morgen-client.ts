@@ -12,7 +12,11 @@ function getApiKey(): string {
   const apiKey = env.MORGEN_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "MORGEN_API_KEY environment variable is required. Please set it in your .env file.",
+      "Morgen API key not configured.\n\n" +
+        "Set it up using one of these methods:\n" +
+        "  1. Run: morgen-config set apiKey <your-api-key>\n" +
+        "  2. Set the MORGEN_API_KEY environment variable\n\n" +
+        "Get your API key from: https://platform.morgen.so/",
     );
   }
   return apiKey;
