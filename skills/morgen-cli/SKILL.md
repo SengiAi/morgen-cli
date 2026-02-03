@@ -40,22 +40,35 @@ morgen-calendar list-calendars
 
 Returns calendar IDs, account IDs, and providers. **Save these to memory.**
 
-### List Events
+### List Events (Default: All Calendars)
 
+```bash
+# List events from ALL calendars (recommended default)
+morgen-calendar list-events --all
+
+# With date range
+morgen-calendar list-events --all \
+  --start "2025-01-27T00:00:00" \
+  --end "2025-02-02T23:59:59"
+
+# Refresh calendar cache if calendars were added/removed
+morgen-calendar list-events --all --refresh-cache
+```
+
+**For a specific calendar only:**
 ```bash
 morgen-calendar list-events \
   --calendar-id <CAL_ID> \
-  --account-id <ACC_ID> \
-  --start "2025-01-27T00:00:00" \
-  --end "2025-02-02T23:59:59" \
-  --timezone "Europe/Stockholm"
+  --account-id <ACC_ID>
 ```
 
 | Option | Default |
 |--------|---------|
+| `--all` | Fetch from all calendars (recommended) |
 | `--start` | 7 days ago |
 | `--end` | 7 days ahead |
 | `--timezone` | Config default or system timezone |
+| `--refresh-cache` | Force refresh calendar cache (with --all) |
 
 All event times are converted to the specified timezone for display.
 
@@ -132,17 +145,36 @@ morgen-tasks close --id <TASK_ID>           # Complete task
 
 ## Listing Events Across Multiple Calendars
 
-The CLI queries one calendar at a time. To show "what's on this week" across all calendars:
-
-1. Get calendar IDs from memory
-2. Run `list-events` for each calendar
-3. Combine and sort results chronologically
+Use `--all` to fetch events from all calendars in one command:
 
 ```bash
-# For each calendar in your saved group:
-morgen-calendar list-events --calendar-id <CAL1> --account-id <ACC1> --start "..." --end "..."
-morgen-calendar list-events --calendar-id <CAL2> --account-id <ACC2> --start "..." --end "..."
+morgen-calendar list-events --all
 ```
+
+This automatically:
+- Fetches all calendars and caches them
+- Queries each calendar for events
+- Combines and sorts results chronologically
+- Displays which calendar each event belongs to
+
+Use `--refresh-cache` if you've added or removed calendars since the last run.
+
+## Event Output Format
+
+Each event returned by `list-events` includes:
+
+| Field | Description |
+|-------|-------------|
+| Title | Event name |
+| Calendar | Which calendar the event belongs to (with --all) |
+| ID | Event ID (needed for update/delete/rsvp) |
+| Start/End | Times in the display timezone |
+| Duration | Human-readable duration (e.g., "1h 30m") |
+| Description | May contain **Google Meet links** and dial-in numbers |
+| Location | Physical or virtual location |
+| Participants | List of attendees with RSVP status (accepted/declined/tentative/needs-action) |
+
+**Google Meet links** are included in the Description field when the event has video conferencing. Look for `https://meet.google.com/...` URLs.
 
 ## Deep-Dive References
 

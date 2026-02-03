@@ -1,6 +1,6 @@
 {
   "name": "morgen-cli",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "CLI tool for Morgen calendar and task management",
   "type": "module",
   "author": "Johannes <johannes@sengi.se>",

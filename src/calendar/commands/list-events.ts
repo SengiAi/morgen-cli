@@ -391,7 +391,7 @@ function displayEvent(
 		const participantEntries = Object.entries(participants);
 		if (participantEntries.length > 0) {
 			console.log(`  Participants:`);
-			for (const [email, participantData] of participantEntries) {
+			for (const [emailKey, participantData] of participantEntries) {
 				if (
 					participantData &&
 					typeof participantData === "object" &&
@@ -407,12 +407,24 @@ function displayEvent(
 								: status === "tentative"
 									? chalk.yellow
 									: chalk.gray;
+					// Decode base64 email if it looks encoded (contains no @ sign)
+					let email = emailKey;
+					if (!emailKey.includes("@")) {
+						try {
+							email = Buffer.from(emailKey, "base64").toString("utf-8");
+						} catch {
+							// Keep original if decoding fails
+						}
+					}
 					const name =
 						"name" in participantData &&
 						typeof participantData.name === "string"
 							? participantData.name
 							: email;
-					console.log(`    - ${name} (${statusColor(status)})`);
+					// Show both name and email if name is available and different from email
+					const display =
+						name !== email ? `${name} <${email}>` : email;
+					console.log(`    - ${display} (${statusColor(status)})`);
 				}
 			}
 		}
