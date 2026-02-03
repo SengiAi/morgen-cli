@@ -19,20 +19,24 @@ const config = readConfig();
  * The actual requirement is enforced when making API calls.
  */
 export const env = cleanEnv(process.env, {
-  MORGEN_API_KEY: str({
-    desc: "Morgen API key for authentication",
-    default: config.apiKey || "",
-  }),
-  DEFAULT_ACCOUNT_ID: str({
-    desc: "Default account ID to use",
-    default: config.defaults?.accountId || "",
-  }),
-  DEFAULT_CALENDAR_ID: str({
-    desc: "Default calendar ID to use",
-    default: config.defaults?.calendarId || "",
-  }),
-  DEFAULT_TIMEZONE: str({
-    desc: "Default timezone for events",
-    default: config.defaults?.timezone || "Europe/Stockholm",
-  }),
+	MORGEN_API_KEY: str({
+		desc: "Morgen API key for authentication",
+		default: config.apiKey || "",
+	}),
+	DEFAULT_ACCOUNT_ID: str({
+		desc: "Default account ID to use",
+		default: config.defaults?.accountId || "",
+	}),
+	DEFAULT_CALENDAR_ID: str({
+		desc: "Default calendar ID to use",
+		default: config.defaults?.calendarId || "",
+	}),
+	DEFAULT_TIMEZONE: str({
+		desc: "Default timezone for events",
+		default: config.defaults?.timezone || "Europe/Stockholm",
+	}),
+	MORGEN_DISABLE_CALENDAR_CACHE: str({
+		desc: "Set to 'true' to disable calendar caching",
+		default: "",
+	}),
 });

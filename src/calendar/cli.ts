@@ -24,8 +24,9 @@ program
 	.command("list-calendars")
 	.alias("lc")
 	.description("List all available calendars")
-	.action(() => {
-		listCalendarsCommand();
+	.option("--refresh-cache", "Force refresh of the calendar cache")
+	.action((options) => {
+		listCalendarsCommand({ refreshCache: options.refreshCache });
 	});
 
 // List events command
@@ -33,8 +34,10 @@ program
 	.command("list-events")
 	.alias("le")
 	.description("List events in a calendar")
-	.requiredOption("--calendar-id <id>", "Calendar ID (required)")
-	.requiredOption("--account-id <id>", "Account ID (required)")
+	.option("--calendar-id <id>", "Calendar ID (required unless --all is used)")
+	.option("--account-id <id>", "Account ID (required unless --all is used)")
+	.option("--all", "Fetch events from all calendars (uses cache)")
+	.option("--refresh-cache", "Force refresh of the calendar cache (with --all)")
 	.option(
 		"--start <date>",
 		"Start date (ISO 8601 format, defaults to 7 days ago)",
@@ -48,6 +51,22 @@ program
 		"Display times in this timezone (IANA format, e.g., Europe/Stockholm). Defaults to config or system timezone.",
 	)
 	.action((options) => {
+		// Validate that --all cannot be combined with --calendar-id or --account-id
+		if (options.all && (options.calendarId || options.accountId)) {
+			console.error(
+				"Error: --all cannot be combined with --calendar-id or --account-id",
+			);
+			process.exit(1);
+		}
+
+		// Validate that either --all is used OR both --calendar-id and --account-id are provided
+		if (!options.all && (!options.calendarId || !options.accountId)) {
+			console.error(
+				"Error: Either use --all or provide both --calendar-id and --account-id",
+			);
+			process.exit(1);
+		}
+
 		listEventsCommand(options);
 	});
 

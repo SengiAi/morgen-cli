@@ -1,13 +1,24 @@
 import chalk from "chalk";
+import { getOrFetchCalendarsGroupedByAccount } from "../calendar-cache";
 import { readConfig } from "../../config";
 import { getEvents } from "../morgen-client";
+import type { MorgenEvent } from "../schemas";
 
 interface ListEventsOptions {
-	calendarId: string;
-	accountId: string;
+	calendarId?: string;
+	accountId?: string;
+	all?: boolean;
+	refreshCache?: boolean;
 	start?: string;
 	end?: string;
 	timezone?: string;
+}
+
+/**
+ * Event with calendar name for display in --all mode
+ */
+interface EventWithCalendar extends MorgenEvent {
+	calendarName: string;
 }
 
 /**
@@ -259,18 +270,231 @@ function getTimezoneOffsetMinutes(
 	return 0;
 }
 
+/**
+ * Display a single event
+ */
+function displayEvent(
+	event: MorgenEvent,
+	targetTimezone: string,
+	calendarName?: string,
+): void {
+	// Get the event's timezone from the raw data (Morgen API may use "timeZone" field)
+	const eventTimezone =
+		event.timezone ||
+		((event as Record<string, unknown>).timeZone as string | undefined);
+
+	console.log(chalk.bold(event.title));
+	if (calendarName) {
+		console.log(`  Calendar: ${calendarName}`);
+	}
+	if (event.id) {
+		console.log(`  ID: ${event.id}`);
+	}
+	console.log(
+		`  Start: ${formatDateTimeInTimezone(event.start, targetTimezone, eventTimezone)}`,
+	);
+
+	// Calculate end time and duration
+	let endTime: string | undefined = event.end;
+	let duration: string | undefined;
+
+	// Check if duration exists in the event data (schema uses passthrough, so it should be preserved)
+	if (
+		"duration" in event &&
+		typeof (event as Record<string, unknown>).duration === "string"
+	) {
+		duration = (event as Record<string, unknown>).duration as string;
+
+		// If end is not provided, calculate it from duration
+		if (!endTime) {
+			// Parse ISO 8601 duration (e.g., "PT1H", "PT30M", "PT1H30M")
+			const durationMatch = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+			if (durationMatch) {
+				const durationHours = Number.parseInt(durationMatch[1] || "0", 10);
+				const durationMinutes = Number.parseInt(durationMatch[2] || "0", 10);
+				// Calculate end time by adding duration to start time string directly
+				// This avoids timezone conversion issues with Date objects
+				endTime = addDurationToLocalTime(
+					event.start,
+					durationHours,
+					durationMinutes,
+				);
+			}
+		}
+	} else if (endTime) {
+		// If duration is not provided but end is, calculate duration display string
+		duration = calculateDurationString(event.start, endTime);
+	}
+
+	if (endTime) {
+		console.log(
+			`  End: ${formatDateTimeInTimezone(endTime, targetTimezone, eventTimezone)}`,
+		);
+	}
+	if (duration) {
+		// Format duration nicely (if it's ISO 8601 format, parse it)
+		if (duration.startsWith("PT")) {
+			const durationMatch = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+			if (durationMatch) {
+				const hours = Number.parseInt(durationMatch[1] || "0", 10);
+				const minutes = Number.parseInt(durationMatch[2] || "0", 10);
+				const durationParts: string[] = [];
+				if (hours > 0) {
+					durationParts.push(`${hours}h`);
+				}
+				if (minutes > 0) {
+					durationParts.push(`${minutes}m`);
+				}
+				if (durationParts.length > 0) {
+					duration = durationParts.join(" ");
+				}
+			}
+		}
+		console.log(`  Duration: ${duration}`);
+	}
+
+	if (event.description) {
+		console.log(`  Description: ${event.description}`);
+	}
+	if (event.location) {
+		console.log(`  Location: ${event.location}`);
+	}
+	if (event.allDay) {
+		console.log(`  All Day: Yes`);
+	}
+	if (event.attendees && event.attendees.length > 0) {
+		console.log(`  Attendees:`);
+		for (const attendee of event.attendees) {
+			const status = attendee.status || "needs-action";
+			const statusColor =
+				status === "accepted"
+					? chalk.green
+					: status === "declined"
+						? chalk.red
+						: status === "tentative"
+							? chalk.yellow
+							: chalk.gray;
+			console.log(
+				`    - ${attendee.name || attendee.email} (${statusColor(status)})`,
+			);
+		}
+	}
+	// Check for participants in raw event data (Morgen API might return it differently)
+	if (
+		typeof event === "object" &&
+		event !== null &&
+		"participants" in event &&
+		typeof (event as Record<string, unknown>).participants === "object"
+	) {
+		const participants = (event as Record<string, unknown>)
+			.participants as Record<string, unknown>;
+		const participantEntries = Object.entries(participants);
+		if (participantEntries.length > 0) {
+			console.log(`  Participants:`);
+			for (const [email, participantData] of participantEntries) {
+				if (
+					participantData &&
+					typeof participantData === "object" &&
+					"participationStatus" in participantData
+				) {
+					const status = (participantData as { participationStatus: string })
+						.participationStatus;
+					const statusColor =
+						status === "accepted"
+							? chalk.green
+							: status === "declined"
+								? chalk.red
+								: status === "tentative"
+									? chalk.yellow
+									: chalk.gray;
+					const name =
+						"name" in participantData &&
+						typeof participantData.name === "string"
+							? participantData.name
+							: email;
+					console.log(`    - ${name} (${statusColor(status)})`);
+				}
+			}
+		}
+	}
+	console.log();
+}
+
+/**
+ * Fetch events from all calendars grouped by account
+ */
+async function fetchAllCalendarEvents(
+	options: ListEventsOptions,
+	startDate: string,
+	endDate: string,
+): Promise<{
+	events: EventWithCalendar[];
+	accountCount: number;
+	calendarCount: number;
+	apiCalls: number;
+	failedAccounts: string[];
+}> {
+	// Get calendars grouped by account (from cache or API)
+	const calendarsByAccount = await getOrFetchCalendarsGroupedByAccount(
+		options.refreshCache,
+	);
+
+	const allEvents: EventWithCalendar[] = [];
+	const failedAccounts: string[] = [];
+	let apiCalls = 0;
+
+	// Create a map of calendarId -> calendarName for quick lookup
+	const calendarNameMap = new Map<string, string>();
+	let totalCalendars = 0;
+	for (const calendars of calendarsByAccount.values()) {
+		for (const cal of calendars) {
+			calendarNameMap.set(cal.id, cal.name);
+			totalCalendars++;
+		}
+	}
+
+	// Make one API call per account with all calendar IDs for that account
+	for (const [accountId, calendars] of calendarsByAccount.entries()) {
+		const calendarIds = calendars.map((cal) => cal.id);
+
+		try {
+			apiCalls++;
+			const events = await getEvents(calendarIds, accountId, startDate, endDate);
+
+			// Add calendar name to each event
+			for (const event of events) {
+				const calendarId = event.calendarId;
+				const calendarName = calendarId
+					? calendarNameMap.get(calendarId) || "Unknown Calendar"
+					: "Unknown Calendar";
+				allEvents.push({ ...event, calendarName });
+			}
+		} catch (error) {
+			// Log the error and continue with other accounts
+			const accountCalendarNames = calendars.map((c) => c.name).join(", ");
+			failedAccounts.push(`${accountId} (${accountCalendarNames})`);
+			console.error(
+				chalk.yellow(
+					`Warning: Failed to fetch events for account ${accountId}: ${error instanceof Error ? error.message : "Unknown error"}`,
+				),
+			);
+		}
+	}
+
+	// Sort events by start time
+	allEvents.sort((a, b) => a.start.localeCompare(b.start));
+
+	return {
+		events: allEvents,
+		accountCount: calendarsByAccount.size,
+		calendarCount: totalCalendars,
+		apiCalls,
+		failedAccounts,
+	};
+}
+
 export async function listEventsCommand(options: ListEventsOptions) {
 	try {
-		if (!options.calendarId) {
-			console.error(chalk.red("Error: --calendar-id is required"));
-			process.exit(1);
-		}
-
-		if (!options.accountId) {
-			console.error(chalk.red("Error: --account-id is required"));
-			process.exit(1);
-		}
-
 		// Get the target timezone for display
 		const targetTimezone = getEffectiveTimezone(options.timezone);
 
@@ -291,168 +515,83 @@ export async function listEventsCommand(options: ListEventsOptions) {
 				now.getDate() + 7,
 			).toISOString();
 
-		console.log(
-			chalk.blue(`\n=== EVENTS FOR CALENDAR: ${options.calendarId} ===`),
-		);
-		console.log(chalk.gray(`Timezone: ${targetTimezone}\n`));
+		if (options.all) {
+			// --all mode: fetch events from all calendars
+			console.log(chalk.blue("\n=== EVENTS FROM ALL CALENDARS ==="));
 
-		const events = await getEvents(
-			options.calendarId,
-			options.accountId,
-			startDate,
-			endDate,
-		);
+			const result = await fetchAllCalendarEvents(options, startDate, endDate);
+			const apiPoints = result.apiCalls * 10;
 
-		if (events.length === 0) {
-			console.log(chalk.yellow("No events found."));
-			return;
-		}
-
-		for (const event of events) {
-			// Get the event's timezone from the raw data (Morgen API may use "timeZone" field)
-			const eventTimezone =
-				event.timezone ||
-				((event as Record<string, unknown>).timeZone as string | undefined);
-
-			console.log(chalk.bold(event.title));
-			if (event.id) {
-				console.log(`  ID: ${event.id}`);
-			}
 			console.log(
-				`  Start: ${formatDateTimeInTimezone(event.start, targetTimezone, eventTimezone)}`,
+				chalk.gray(
+					`Accounts: ${result.accountCount} | Calendars: ${result.calendarCount} | API calls: ${result.apiCalls} (${apiPoints} points)`,
+				),
+			);
+			console.log(chalk.gray(`Timezone: ${targetTimezone}\n`));
+
+			if (result.events.length === 0) {
+				console.log(chalk.yellow("No events found."));
+			} else {
+				for (const event of result.events) {
+					displayEvent(event, targetTimezone, event.calendarName);
+				}
+				console.log(chalk.gray(`Total: ${result.events.length} event(s)\n`));
+			}
+
+			// Show warning for failed accounts at the end
+			if (result.failedAccounts.length > 0) {
+				console.log(
+					chalk.yellow(
+						`\nWarning: Failed to fetch events from ${result.failedAccounts.length} account(s):`,
+					),
+				);
+				for (const account of result.failedAccounts) {
+					console.log(chalk.yellow(`  - ${account}`));
+				}
+			}
+
+			// Exit with error if all accounts failed
+			if (
+				result.failedAccounts.length > 0 &&
+				result.failedAccounts.length === result.accountCount
+			) {
+				process.exit(1);
+			}
+		} else {
+			// Single calendar mode (original behavior)
+			if (!options.calendarId) {
+				console.error(chalk.red("Error: --calendar-id is required"));
+				process.exit(1);
+			}
+
+			if (!options.accountId) {
+				console.error(chalk.red("Error: --account-id is required"));
+				process.exit(1);
+			}
+
+			console.log(
+				chalk.blue(`\n=== EVENTS FOR CALENDAR: ${options.calendarId} ===`),
+			);
+			console.log(chalk.gray(`Timezone: ${targetTimezone}\n`));
+
+			const events = await getEvents(
+				options.calendarId,
+				options.accountId,
+				startDate,
+				endDate,
 			);
 
-			// Calculate end time and duration
-			let endTime: string | undefined = event.end;
-			let duration: string | undefined;
-
-			// Check if duration exists in the event data (schema uses passthrough, so it should be preserved)
-			if (
-				"duration" in event &&
-				typeof (event as Record<string, unknown>).duration === "string"
-			) {
-				duration = (event as Record<string, unknown>).duration as string;
-
-				// If end is not provided, calculate it from duration
-				if (!endTime) {
-					// Parse ISO 8601 duration (e.g., "PT1H", "PT30M", "PT1H30M")
-					const durationMatch = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-					if (durationMatch) {
-						const durationHours = Number.parseInt(durationMatch[1] || "0", 10);
-						const durationMinutes = Number.parseInt(
-							durationMatch[2] || "0",
-							10,
-						);
-						// Calculate end time by adding duration to start time string directly
-						// This avoids timezone conversion issues with Date objects
-						endTime = addDurationToLocalTime(
-							event.start,
-							durationHours,
-							durationMinutes,
-						);
-					}
-				}
-			} else if (endTime) {
-				// If duration is not provided but end is, calculate duration display string
-				duration = calculateDurationString(event.start, endTime);
+			if (events.length === 0) {
+				console.log(chalk.yellow("No events found."));
+				return;
 			}
 
-			if (endTime) {
-				console.log(
-					`  End: ${formatDateTimeInTimezone(endTime, targetTimezone, eventTimezone)}`,
-				);
-			}
-			if (duration) {
-				// Format duration nicely (if it's ISO 8601 format, parse it)
-				if (duration.startsWith("PT")) {
-					const durationMatch = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-					if (durationMatch) {
-						const hours = Number.parseInt(durationMatch[1] || "0", 10);
-						const minutes = Number.parseInt(durationMatch[2] || "0", 10);
-						const durationParts: string[] = [];
-						if (hours > 0) {
-							durationParts.push(`${hours}h`);
-						}
-						if (minutes > 0) {
-							durationParts.push(`${minutes}m`);
-						}
-						if (durationParts.length > 0) {
-							duration = durationParts.join(" ");
-						}
-					}
-				}
-				console.log(`  Duration: ${duration}`);
+			for (const event of events) {
+				displayEvent(event, targetTimezone);
 			}
 
-			if (event.description) {
-				console.log(`  Description: ${event.description}`);
-			}
-			if (event.location) {
-				console.log(`  Location: ${event.location}`);
-			}
-			if (event.allDay) {
-				console.log(`  All Day: Yes`);
-			}
-			if (event.attendees && event.attendees.length > 0) {
-				console.log(`  Attendees:`);
-				for (const attendee of event.attendees) {
-					const status = attendee.status || "needs-action";
-					const statusColor =
-						status === "accepted"
-							? chalk.green
-							: status === "declined"
-								? chalk.red
-								: status === "tentative"
-									? chalk.yellow
-									: chalk.gray;
-					console.log(
-						`    - ${attendee.name || attendee.email} (${statusColor(status)})`,
-					);
-				}
-			}
-			// Check for participants in raw event data (Morgen API might return it differently)
-			if (
-				typeof event === "object" &&
-				event !== null &&
-				"participants" in event &&
-				typeof (event as Record<string, unknown>).participants === "object"
-			) {
-				const participants = (event as Record<string, unknown>)
-					.participants as Record<string, unknown>;
-				const participantEntries = Object.entries(participants);
-				if (participantEntries.length > 0) {
-					console.log(`  Participants:`);
-					for (const [email, participantData] of participantEntries) {
-						if (
-							participantData &&
-							typeof participantData === "object" &&
-							"participationStatus" in participantData
-						) {
-							const status = (
-								participantData as { participationStatus: string }
-							).participationStatus;
-							const statusColor =
-								status === "accepted"
-									? chalk.green
-									: status === "declined"
-										? chalk.red
-										: status === "tentative"
-											? chalk.yellow
-											: chalk.gray;
-							const name =
-								"name" in participantData &&
-								typeof participantData.name === "string"
-									? participantData.name
-									: email;
-							console.log(`    - ${name} (${statusColor(status)})`);
-						}
-					}
-				}
-			}
-			console.log();
+			console.log(chalk.gray(`Total: ${events.length} event(s)\n`));
 		}
-
-		console.log(chalk.gray(`Total: ${events.length} event(s)\n`));
 	} catch (error) {
 		if (error instanceof Error) {
 			console.error(chalk.red(`Error: ${error.message}`));

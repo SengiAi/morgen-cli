@@ -140,25 +140,30 @@ export async function getCalendars(): Promise<MorgenCalendar[]> {
 }
 
 /**
- * Get events for a specific calendar
- * @param calendarId Calendar ID
+ * Get events for one or more calendars
+ * @param calendarIds Calendar ID(s) - single string or array of strings
  * @param accountId Account ID
  * @param start Start date (ISO 8601 format)
  * @param end End date (ISO 8601 format)
  * @returns Promise resolving to an array of events
  */
 export async function getEvents(
-	calendarId: string,
+	calendarIds: string | string[],
 	accountId: string,
 	start: string,
 	end: string,
 ): Promise<MorgenEvent[]> {
+	// Join multiple calendar IDs with commas for the API
+	const calendarIdsParam = Array.isArray(calendarIds)
+		? calendarIds.join(",")
+		: calendarIds;
+
 	const response = await makeMorgenRequest<{ data: { events: unknown[] } }>(
 		"/events/list",
 		"GET",
 		undefined,
 		{
-			calendarIds: calendarId,
+			calendarIds: calendarIdsParam,
 			accountId,
 			start,
 			end,
