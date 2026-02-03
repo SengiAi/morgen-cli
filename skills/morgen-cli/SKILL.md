@@ -47,10 +47,17 @@ morgen-calendar list-events \
   --calendar-id <CAL_ID> \
   --account-id <ACC_ID> \
   --start "2025-01-27T00:00:00" \
-  --end "2025-02-02T23:59:59"
+  --end "2025-02-02T23:59:59" \
+  --timezone "Europe/Stockholm"
 ```
 
-Default range: 7 days ago to 7 days ahead.
+| Option | Default |
+|--------|---------|
+| `--start` | 7 days ago |
+| `--end` | 7 days ahead |
+| `--timezone` | Config default or system timezone |
+
+All event times are converted to the specified timezone for display.
 
 ### Create Event
 
@@ -137,12 +144,6 @@ morgen-calendar list-events --calendar-id <CAL1> --account-id <ACC1> --start "..
 morgen-calendar list-events --calendar-id <CAL2> --account-id <ACC2> --start "..." --end "..."
 ```
 
-## Timezone Handling
-
-- Default: `Europe/Stockholm`
-- Override: `--timezone "America/New_York"`
-- UTC: Use `Z` suffix: `--start "2025-01-28T15:00:00Z"`
-
 ## Deep-Dive References
 
 | Reference | Description |
@@ -152,10 +153,20 @@ morgen-calendar list-events --calendar-id <CAL2> --account-id <ACC2> --start "..
 | [references/tasks.md](references/tasks.md) | Complete tasks reference |
 | [references/memory-setup.md](references/memory-setup.md) | **Critical** - How to save calendar IDs |
 
+## Rate Limiting
+
+The CLI automatically handles rate limits:
+- Retries up to 3 times on 429 errors with exponential backoff
+- Warns when approaching rate limit (≤10 requests remaining)
+- Respects `Retry-After` header from the API
+
+**Limits:** 100 points per 15 minutes (list endpoints cost 10 points, others cost 1 point).
+
 ## Error Troubleshooting
 
 | Error | Solution |
 |-------|----------|
 | "API key not configured" | `morgen-config set apiKey YOUR_KEY` |
 | "Calendar not found" | Run `list-calendars` to get correct IDs |
+| "Rate Limited" | Wait and retry (CLI handles this automatically) |
 | Command not found | `npm install -g morgen-cli` |

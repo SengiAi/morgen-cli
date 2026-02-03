@@ -111,3 +111,12 @@ API key is invalid. Generate a new one at https://platform.morgen.so/
 ### No calendars found
 
 Connect calendar accounts in the Morgen app first, then retry.
+
+### 429 Rate Limited
+
+The CLI automatically retries with exponential backoff. If you see repeated rate limit errors:
+- Wait a few minutes before retrying
+- Use `updatedAfter` filters when syncing tasks to reduce API calls
+- Cache calendar/account IDs to avoid repeated `list-calendars` calls
+
+**Rate limits:** 100 points per 15 minutes. List endpoints cost 10 points, others cost 1 point.
